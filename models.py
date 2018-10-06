@@ -74,7 +74,7 @@ class Block(nn.Module):
         return self.main(x)
 
 class Unet(nn.Module):
-    def __init__(self, num_features, num_residuals=2, gated=False, gate_param=0., tanh_mode=False):
+    def __init__(self, num_features, num_residuals=2, gated=False, gate_param=0.):
         super(Unet, self).__init__()
 
         self.block01 = Block(1, num_features*1, num_residuals=2, gated=gated, gate_param=gate_param)
@@ -113,11 +113,7 @@ class Unet(nn.Module):
         self.block10 = Block(num_features*2, num_features*1, num_residuals=num_residuals, gated=gated, gate_param=gate_param)
 
         self.final_conv = nn.Conv2d(num_features*1, 1, kernel_size=1, stride=1, padding=0, bias=True)
-
-        if tanh_mode:
-            self.final_acti = nn.Tanh()
-        else:
-            self.final_acti = nn.Sigmoid()
+        self.final_acti = nn.Sigmoid()
 
     def forward(self, x):
         b01 = self.block01(x)
