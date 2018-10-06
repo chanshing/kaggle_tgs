@@ -29,7 +29,7 @@ def main(args):
     optimizerG = optim.Adam(netG.parameters(), lr=args.lr, amsgrad=True)
     loss_func = torch.nn.BCELoss()
 
-    log = logger.LoggerBCE(args.outf, netG, images_test, masks_test, tanh_mode=False, bcefunc=loss_func)
+    log = logger.LoggerBCE(args.outf, netG, images_train[:512], masks_train[:512], images_test, masks_test, bcefunc=loss_func)
 
     # for epoch in range(args.nepoch):
     #     for images, masks in dataloader:
@@ -55,7 +55,7 @@ def main(args):
 
         if (i+1) % args.nprint == 0:
             print "[{}/{} | loss: {:.3f}".format(i+1, args.niter, loss.item())
-            log.flush(i+1, masks_pred, masks, loss.item())
+            log.flush(i+1)
 
             if (i+1) > 20000:
                 torch.save(netG.state_dict(), '{}/netG_iter_{}.pth'.format(args.outf, i+1))
@@ -70,7 +70,7 @@ if __name__ == '__main__':
         args.outf = '{}/tmp'.format(args.outf)
         args.niter = 30
         args.nprint = 10
-        args.batch_size = 2
+        args.batch_size = 8
         args.num_features_D = 2
         args.num_features_G = 2
 

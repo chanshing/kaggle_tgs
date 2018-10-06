@@ -13,7 +13,6 @@ class BaseParser(argparse.ArgumentParser):
         self.add_argument('--niterD', type=int, default=5, help='no. updates of D per update of G')
         self.add_argument('--alpha', type=float, default=1.0, help='Lagrange multiplier')
         self.add_argument('--rho', type=float, default=1e-3, help='quadratic weight penalty')
-        self.add_argument('--tanh_mode', action='store_true')
         self.add_argument('--bce_weight', type=float, default=1.)
         self.add_argument('--add_bce', action='store_true')
         self.add_argument('--archD', default='v0')
