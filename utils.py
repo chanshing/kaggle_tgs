@@ -146,7 +146,7 @@ def get_score(masks, masks_pred, cutoff=0.5):
 class SmoothBinary(object):
     """ Smooth a binary distribution. Must be in [0,1] range """
     def __init__(self, scale=0.1):
-        self.scale = 0.1
+        self.scale = scale
 
     def __call__(self, tensor):
         noise = torch.randn_like(tensor).abs() * self.scale
