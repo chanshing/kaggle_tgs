@@ -317,8 +317,55 @@ class DCGAN_Dv0b(DCGAN_Dv0):
         x = torch.cat((x1, (x1*x2)), dim=1)
         return self.main(x).view(-1,1)
 
+class DCGAN_Dv1(nn.Module):
+    """ Like v0 but conv instead of downsampleconv """
+    def __init__(self, num_features, nc=2, dropout=0):
+        super(DCGAN_Dv1, self).__init__()
 
-choiceD = {'v0':DCGAN_Dv0, 'v0a':DCGAN_Dv0a, 'v0b':DCGAN_Dv0b}
+        main = nn.Sequential(
+            # 101 -> 99
+            nn.Conv2d(nc, num_features*1, 3, 1, 0, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),
+            # 99 -> 33
+            nn.Conv2d(num_features*1, num_features*2, 3, 3, 0, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Dropout(dropout),
+            # 33 -> 11
+            nn.Conv2d(num_features*2, num_features*4, 3, 3, 0, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),
+            # 11 -> 9
+            nn.Conv2d(num_features*4, num_features*8, 3, 1, 0, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Dropout(dropout),
+            # 9 -> 1
+            nn.Conv2d(num_features*8, 1, 9, 1, 0, bias=False)
+        )
+        self.main = main
+
+    def forward(self, x):
+        x = 2.0 * (x - 0.5)  # [0,1] -> [-1,1]
+        return self.main(x)
+
+class DCGAN_Dv1a(DCGAN_Dv1):
+    def __init__(self, num_features, nc=1, dropout=0):
+        DCGAN_Dv1.__init__(self, num_features, nc, dropout)
+
+    def forward(self, x):
+        x1, x2 = x[:,0,:,:].unsqueeze(1), x[:,1,:,:].unsqueeze(1)
+        x = (x1 * x2)
+        return self.main(x).view(-1,1)
+
+class DCGAN_Dv1b(DCGAN_Dv1):
+    def __init__(self, num_features, nc=2, dropout=0):
+        DCGAN_Dv1.__init__(self, num_features, nc, dropout)
+
+    def forward(self, x):
+        x1, x2 = x[:,0,:,:].unsqueeze(1), x[:,1,:,:].unsqueeze(1)
+        x = torch.cat((x1, (x1*x2)), dim=1)
+        return self.main(x).view(-1,1)
+
+choiceD = {'v0':DCGAN_Dv0, 'v0a':DCGAN_Dv0a, 'v0b':DCGAN_Dv0b,
+           'v1':DCGAN_Dv1, 'v1a':DCGAN_Dv1a, 'v1b':DCGAN_Dv1b}
 
 class DCGAN_G(nn.Module):
     def __init__(self, num_features, nz, nc=1):
