@@ -20,10 +20,12 @@ class Logger(object):
         self.masks_test = masks_test
         self.outf = outf
 
+        self.num_iters = []
         self.scores_train = []
         self.scores_test = []
 
     def flush(self, i):
+        self.num_iters.append(i)
         self.eval_netG()
         self.update_scores()
         self.show_masks(i)
@@ -31,8 +33,10 @@ class Logger(object):
     def eval_netG(self):
         self.netG.eval()
         with torch.no_grad():
-            self.masks_train_pred = self.netG(self.images_train)
-            self.masks_test_pred = self.netG(self.images_test)
+            # self.masks_train_pred = self.netG(self.images_train)
+            # self.masks_test_pred = self.netG(self.images_test)
+            self.masks_train_pred = utils.batch_eval(self.netG, self.images_train)
+            self.masks_test_pred = utils.batch_eval(self.netG, self.images_test)
         self.netG.train()
 
     def show_masks(self, i):
@@ -58,8 +62,8 @@ class Logger(object):
 
     def plot_curves(self, c1, l1, c2, l2, fname):
         fig, ax = plt.subplots()
-        ax.plot(c1, label=l1)
-        ax.plot(c2, label=l2)
+        ax.plot(self.num_iters, c1, label=l1, ls=':')
+        ax.plot(self.num_iters, c2, label=l2)
         ax.legend()
         fig.savefig('{}/{}.png'.format(self.outf, fname))
         plt.close(fig)
