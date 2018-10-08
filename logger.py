@@ -12,8 +12,8 @@ import utils
 
 class Logger(object):
     """ Scores and masks """
-    def __init__(self, outf, netG, images_train, masks_train, images_test, masks_test):
-        self.netG = netG
+    def __init__(self, outf, netF, images_train, masks_train, images_test, masks_test):
+        self.netF = netF
         self.images_train = images_train
         self.masks_train = masks_train
         self.images_test = images_test
@@ -31,13 +31,13 @@ class Logger(object):
         self.show_masks(i)
 
     def eval_netG(self):
-        self.netG.eval()
+        self.netF.eval()
         with torch.no_grad():
-            # self.masks_train_pred = self.netG(self.images_train)
-            # self.masks_test_pred = self.netG(self.images_test)
-            self.masks_train_pred = utils.batch_eval(self.netG, self.images_train)
-            self.masks_test_pred = utils.batch_eval(self.netG, self.images_test)
-        self.netG.train()
+            # self.masks_train_pred = self.netF(self.images_train)
+            # self.masks_test_pred = self.netF(self.images_test)
+            self.masks_train_pred = utils.batch_eval(self.netF, self.images_train)
+            self.masks_test_pred = utils.batch_eval(self.netF, self.images_test)
+        self.netF.train()
 
     def show_masks(self, i):
         idxs_train = np.random.choice(len(self.masks_train), size=8, replace=False)
@@ -70,8 +70,8 @@ class Logger(object):
 
 class LoggerBCE(Logger):
     """ Extend Logger to include BCE losses """
-    def __init__(self, outf, netG, images_train, masks_train, images_test, masks_test, bcefunc):
-        Logger.__init__(self, outf, netG, images_train, masks_train, images_test, masks_test)
+    def __init__(self, outf, netF, images_train, masks_train, images_test, masks_test, bcefunc):
+        Logger.__init__(self, outf, netF, images_train, masks_train, images_test, masks_test)
         self.bcefunc = bcefunc
         self.bcelosses_train = []
         self.bcelosses_test = []
@@ -90,8 +90,8 @@ class LoggerBCE(Logger):
 
 class LoggerGAN(LoggerBCE):
     """ Extend LoggerBCE to include GAN status """
-    def __init__(self, outf, netG, images_train, masks_train, images_test, masks_test, bcefunc):
-        LoggerBCE.__init__(self, outf, netG, images_train, masks_train, images_test, masks_test, bcefunc)
+    def __init__(self, outf, netF, images_train, masks_train, images_test, masks_test, bcefunc):
+        LoggerBCE.__init__(self, outf, netF, images_train, masks_train, images_test, masks_test, bcefunc)
         self.ipms = []
         self.alphas = []
         self.omegas = []
