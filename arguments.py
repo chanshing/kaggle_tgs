@@ -23,7 +23,7 @@ class BaseParser(argparse.ArgumentParser):
         self.add_argument('--csv_file', default='all/train.csv')
         self.add_argument('--root_dir', default='all/train/')
         # --- unet arch
-        self.add_argument('--num_features_G', type=int, default=4)
+        self.add_argument('--num_features_F', type=int, default=4)
         self.add_argument('--num_residuals', type=int, default=2)
         self.add_argument('--gated', action='store_true')
         self.add_argument('--gate_param', type=float, default=0.)

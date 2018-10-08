@@ -31,7 +31,7 @@ def main(args):
     dataloader = torch.utils.data.DataLoader(dataset_train, batch_size=args.batch_size, shuffle=True, drop_last=True, num_workers=1)
     dataiter = utils.dataiterator(dataloader)
 
-    netF = models.choiceF[args.archF](num_features=args.num_features_G, num_residuals=args.num_residuals, gated=args.gated, gate_param=args.gate_param).to(device)
+    netF = models.choiceF[args.archF](num_features=args.num_features_F, num_residuals=args.num_residuals, gated=args.gated, gate_param=args.gate_param).to(device)
     netD = models.choiceD[args.archD](num_features=args.num_features_D, dropout=args.dropout).to(device)
     print netF
     print netD
@@ -121,6 +121,6 @@ if __name__ == '__main__':
         args.nprint = 10
         args.batch_size = 8
         args.num_features_D = 2
-        args.num_features_G = 2
+        args.num_features_F = 2
 
     main(args)

@@ -28,7 +28,7 @@ def main(args):
     dataloader = torch.utils.data.DataLoader(dataset_train, batch_size=args.batch_size, shuffle=True, drop_last=True, num_workers=1)
     dataiter = utils.dataiterator(dataloader)
 
-    netF = models.choiceF[args.archG](num_features=args.num_features_G, num_residuals=args.num_residuals, gated=args.gated, gate_param=args.gate_param).to(device)
+    netF = models.choiceF[args.archG](num_features=args.num_features_F, num_residuals=args.num_residuals, gated=args.gated, gate_param=args.gate_param).to(device)
     optimizerG = optim.Adam(netF.parameters(), lr=args.lr, amsgrad=True)
     loss_func = torch.nn.BCELoss()
 
@@ -49,7 +49,7 @@ def main(args):
     #     log.flush(epoch+1)
 
     #     if (epoch+1) > 20000:
-    #         torch.save(netF.state_dict(), '{}/netG_iter_{}.pth'.format(args.outf, epoch+1))
+    #         torch.save(netF.state_dict(), '{}/netF_iter_{}.pth'.format(args.outf, epoch+1))
 
     for i in range(args.niter):
         optimizerG.zero_grad()
@@ -65,7 +65,7 @@ def main(args):
             log.flush(i+1)
 
             if (i+1) > 20000:
-                torch.save(netF.state_dict(), '{}/netG_iter_{}.pth'.format(args.outf, i+1))
+                torch.save(netF.state_dict(), '{}/netF_iter_{}.pth'.format(args.outf, i+1))
 
 if __name__ == '__main__':
     parser = arguments.BaseParser()
@@ -80,6 +80,6 @@ if __name__ == '__main__':
         args.nprint = 10
         args.batch_size = 8
         args.num_features_D = 2
-        args.num_features_G = 2
+        args.num_features_F = 2
 
     main(args)
