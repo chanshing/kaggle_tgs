@@ -19,28 +19,31 @@ def main(args):
     os.system('mkdir -p {}'.format(args.outf))
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    print "-- Add bce loss: {}".format(args.add_bce)
+    print "Using BCE loss: {}".format(not args.no_bce)
 
-    images_train, images_test, masks_train, masks_test = utils.load_seismic_data(args.csv_file, args.root_dir, test_size=.2, random_state=args.seed)
-    transform = transforms.Compose([utils.RandomHorizontalFlip(), utils.ToTensor()])
+    images_train, images_test, masks_train, masks_test = utils.load_seismic_data(args.root_dir, test_size=.2, random_state=args.seed)
+    images_train, masks_train = utils.concatenate_hflips(images_train, masks_train, shuffle=True, random_state=args.seed)
+    images_test, masks_test = utils.concatenate_hflips(images_test, masks_test, shuffle=True, random_state=args.seed)
+
+    # transform = transforms.Compose([utils.augment(), utils.ToTensor()])
+    transform = transforms.Compose([utils.ToTensor()])
     dataset_train = utils.SegmentationDataset(images_train, masks_train, transform=transform)
-    # dataloader = torch.utils.data.DataLoader(dataset_train, batch_size=args.batch_size, shuffle=True, drop_last=True, num_workers=1)
-    dataiter = utils.DataIterator(dataset_train, batch_size=args.batch_size)
+    dataloader = torch.utils.data.DataLoader(dataset_train, batch_size=args.batch_size, shuffle=True, drop_last=True, num_workers=1)
+    dataiter = utils.dataiterator(dataloader)
 
-    images_test, masks_test = torch.from_numpy(images_test).to(device), torch.from_numpy(masks_test).to(device)
-
-    netG = models.Unet(num_features=args.num_features_G, num_residuals=args.num_residuals, gated=args.gated, gate_param=args.gate_param).to(device)
+    netF = models.choiceF[args.archF](num_features=args.num_features_G, num_residuals=args.num_residuals, gated=args.gated, gate_param=args.gate_param).to(device)
     netD = models.choiceD[args.archD](num_features=args.num_features_D, dropout=args.dropout).to(device)
-    print netG
+    print netF
     print netD
-    optimizerG = optim.Adam(netG.parameters(), betas=(0.5, 0.999), lr=args.lr, amsgrad=True)
+    optimizerF = optim.Adam(netF.parameters(), lr=args.lr, amsgrad=True)
     optimizerD = optim.Adam(netD.parameters(), betas=(0.5, 0.999), lr=args.lr, amsgrad=True)
     alpha = torch.tensor(args.alpha).to(device)
     loss_func = torch.nn.BCELoss()
 
     smooth_binary = utils.SmoothBinary(scale=0.1)
 
-    log = logger.LoggerGAN(args.outf, netG, images_train[:512], masks_train[:512], images_test, masks_test, bcefunc=loss_func)
+    images_test, masks_test = torch.from_numpy(images_test).to(device), torch.from_numpy(masks_test).to(device)
+    log = logger.LoggerGAN(args.outf, netF, torch.from_numpy(images_train[:512]).to(device), torch.from_numpy(masks_train[:512]).to(device), images_test, masks_test, bcefunc=loss_func)
 
     start_time = time.time()
     for i in range(args.niter):
@@ -50,12 +53,12 @@ def main(args):
             optimizerD.zero_grad()
 
             images_real, masks_real = next(dataiter)
-            images_real = images_real.to(device)
-            masks_fake = netG(images_real)
+            images_real, masks_real = images_real.to(device), masks_real.to(device)
+            masks_fake = netF(images_real)
             x_fake = torch.cat((images_real, masks_fake), dim=1)
 
-            images_real, masks_real = next(dataiter)
-            images_real, masks_real = images_real.to(device), masks_real.to(device)
+            # images_real, masks_real = next(dataiter)
+            # images_real, masks_real = images_real.to(device), masks_real.to(device)
             masks_real = smooth_binary(masks_real)
             x_real = torch.cat((images_real, masks_real), dim=1)
 
@@ -78,18 +81,18 @@ def main(args):
             alpha -= args.rho*(1.0 - omega.item())
 
         # --- train G
-        optimizerG.zero_grad()
+        optimizerF.zero_grad()
         images_real, masks_real = next(dataiter)
         images_real, masks_real = images_real.to(device), masks_real.to(device)
-        masks_fake = netG(images_real)
+        masks_fake = netF(images_real)
         x_fake = torch.cat((images_real, masks_fake), dim=1)
         y_fake = netD(x_fake)
         loss = -y_fake.mean()
         bceloss = loss_func(masks_fake, masks_real)
-        if args.add_bce:
+        if not args.no_bce:
             loss = loss + bceloss * args.bce_weight
         loss.backward()
-        optimizerG.step()
+        optimizerF.step()
 
         log.dump(lossE.item(), alpha.item(), omega.item())
 
@@ -101,7 +104,7 @@ def main(args):
             log.flush(i+1)
 
             if (i+1) > 20000:
-                torch.save(netG.state_dict(), '{}/netG_iter_{}.pth'.format(args.outf, i+1))
+                torch.save(netF.state_dict(), '{}/netF_iter_{}.pth'.format(args.outf, i+1))
                 torch.save(netD.state_dict(), '{}/netD_iter_{}.pth'.format(args.outf, i+1))
 
             start_time = time.time()
