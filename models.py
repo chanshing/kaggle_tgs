@@ -113,15 +113,15 @@ class Unetv0(nn.Module):
 
         self.block12 = Block(num_features*1, num_features*2, num_residuals=num_residuals, gated=gated, gate_param=gate_param)
         # 50 -> 25
-        self.down01 = nn.MaxPool2d(2)
+        self.down12 = nn.MaxPool2d(2)
 
         self.block23 = Block(num_features*2, num_features*4, num_residuals=num_residuals, gated=gated, gate_param=gate_param)
         # 25 -> 12
-        self.down01 = nn.MaxPool2d(2)
+        self.down23 = nn.MaxPool2d(2)
 
         self.block34 = Block(num_features*4, num_features*8, num_residuals=num_residuals, gated=gated, gate_param=gate_param)
         # 12 -> 6
-        self.down01 = nn.MaxPool2d(2)
+        self.down34 = nn.MaxPool2d(2)
 
         # middle
         self.block44 = Block(num_features*8, num_features*16, num_residuals=num_residuals, gated=gated, gate_param=gate_param)
@@ -170,7 +170,7 @@ class Unetv0(nn.Module):
 
 class Unetv0a(Unetv0):
     def __init__(self, num_features, num_residuals=2, gated=False, gate_param=0.):
-        Unetv0.__init__(self, num_features, num_residuals=2, gated=False, gate_param=0.)
+        Unetv0.__init__(self, num_features, num_residuals, gated, gate_param)
         self.down01 = nn.Conv2d(num_features*1, num_features*1, kernel_size=3, stride=2, padding=0, bias=False)
         self.down12 = nn.Conv2d(num_features*2, num_features*2, kernel_size=2, stride=2, padding=0, bias=False)
         self.down23 = nn.Conv2d(num_features*4, num_features*4, kernel_size=3, stride=2, padding=0, bias=False)
@@ -243,7 +243,7 @@ class Unetv0a(Unetv0):
 
 class Unetv1(Unetv0):
     def __init__(self, num_features, num_residuals=2, gated=False, gate_param=0.):
-        Unetv0.__init__(self, num_features, num_residuals=2, gated=False, gate_param=0.)
+        Unetv0.__init__(self, num_features, num_residuals, gated, gate_param)
 
         # 101 -> 99
         self.down01 = nn.Conv2d(num_features*1, num_features*1, kernel_size=3, stride=1, padding=0, bias=False)
@@ -264,12 +264,12 @@ class Unetv1(Unetv0):
 
 class Unetv1a(Unetv1):
     def __init__(self, num_features, num_residuals=2, gated=False, gate_param=0.):
-        Unetv1.__init__(self, num_features, num_residuals=2, gated=False, gate_param=0.)
+        Unetv1.__init__(self, num_features, num_residuals, gated, gate_param)
 
         self.down12 = nn.Conv2d(num_features*2, num_features*2, kernel_size=3, stride=3, padding=0, bias=False)
         self.down23 = nn.Conv2d(num_features*4, num_features*4, kernel_size=3, stride=3, padding=0, bias=False)
 
-choiceG = {'v0':Unetv0, 'v0a':Unetv0a, 'v1':Unetv1, 'v1a':Unetv1a}
+choiceF = {'v0':Unetv0, 'v0a':Unetv0a, 'v1':Unetv1, 'v1a':Unetv1a}
 
 class DCGAN_Dv0(nn.Module):
     def __init__(self, num_features, nc=2, dropout=0):
@@ -277,7 +277,7 @@ class DCGAN_Dv0(nn.Module):
 
         main = nn.Sequential(
             # 101 -> 99
-            nn.Conv2d(1, num_features*1, 3, 1, 0, bias=False),
+            nn.Conv2d(nc, num_features*1, 3, 1, 0, bias=False),
             nn.LeakyReLU(0.2, inplace=True),
             # 99 -> 33
             DownsampleConvLayer(num_features*1, num_features*2, bias=False, scale_factor=1./3),
@@ -301,7 +301,7 @@ class DCGAN_Dv0(nn.Module):
 
 class DCGAN_Dv0a(DCGAN_Dv0):
     def __init__(self, num_features, nc=1, dropout=0):
-        DCGAN_Dv0.__init__(self, num_features, nc=1, dropout=0)
+        DCGAN_Dv0.__init__(self, num_features, nc, dropout)
 
     def forward(self, x):
         x1, x2 = x[:,0,:,:].unsqueeze(1), x[:,1,:,:].unsqueeze(1)
@@ -310,7 +310,7 @@ class DCGAN_Dv0a(DCGAN_Dv0):
 
 class DCGAN_Dv0b(DCGAN_Dv0):
     def __init__(self, num_features, nc=2, dropout=0):
-        DCGAN_Dv0.__init__(self, num_features, nc=2, dropout=0)
+        DCGAN_Dv0.__init__(self, num_features, nc, dropout)
 
     def forward(self, x):
         x1, x2 = x[:,0,:,:].unsqueeze(1), x[:,1,:,:].unsqueeze(1)
