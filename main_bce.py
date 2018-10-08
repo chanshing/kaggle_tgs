@@ -28,7 +28,7 @@ def main(args):
     dataloader = torch.utils.data.DataLoader(dataset_train, batch_size=args.batch_size, shuffle=True, drop_last=True, num_workers=1)
     dataiter = utils.dataiterator(dataloader)
 
-    netF = models.choiceF[args.archG](num_features=args.num_features_F, num_residuals=args.num_residuals, gated=args.gated, gate_param=args.gate_param).to(device)
+    netF = models.choiceF[args.archF](num_features=args.num_features_F, num_residuals=args.num_residuals, gated=args.gated, gate_param=args.gate_param).to(device)
     optimizerG = optim.Adam(netF.parameters(), lr=args.lr, amsgrad=True)
     loss_func = torch.nn.BCELoss()
 
