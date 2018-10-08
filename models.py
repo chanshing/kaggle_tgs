@@ -33,6 +33,28 @@ class ConvLayer(nn.Module):
         out = self.conv2d(out)
         return out
 
+class InterpolateConvLayer(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=False, **interpolate_kws):
+        super(InterpolateConvLayer, self).__init__()
+        self.interpolate_kws = interpolate_kws
+        self.reflection_pad = nn.ReflectionPad2d(padding)
+        self.conv2d = nn.Conv2d(in_channels, out_channels, kernel_size, stride, 0, bias=bias)
+
+    def forward(self, x):
+        x = F.interpolate(x, **self.interpolate_kws)
+        out = self.reflection_pad(x)
+        out = self.conv2d(out)
+        return out
+
+class InterpolateLayer(nn.Module):
+    def __init__(self, **kwargs):
+        super(InterpolateLayer, self).__init__()
+        self.kwargs = kwargs
+
+    def forward(self, x):
+        x = F.interpolate(x, **self.kwargs)
+        return x
+
 class ResidualBlock(nn.Module):
     def __init__(self, num_features, gated=False, gate_param=0.):
         super(ResidualBlock, self).__init__()
@@ -73,9 +95,9 @@ class Block(nn.Module):
     def forward(self, x):
         return self.main(x)
 
-class Unet(nn.Module):
+class Unetv0(nn.Module):
     def __init__(self, num_features, num_residuals=2, gated=False, gate_param=0.):
-        super(Unet, self).__init__()
+        super(Unetv0, self).__init__()
 
         self.block01 = Block(1, num_features*1, num_residuals=2, gated=gated, gate_param=gate_param)
         # 101 -> 50
@@ -137,6 +159,94 @@ class Unet(nn.Module):
         u10 = self.up10(b21)  # 50 -> 101
         y = self.final_acti(self.final_conv(u10))
         return y
+
+class Unetv1(nn.Module):
+    def __init__(self, num_features, num_residuals=2, gated=False, gate_param=0.):
+        super(Unetv1, self).__init__()
+
+        self.block01 = Block(1, num_features*1, num_residuals=2, gated=gated, gate_param=gate_param)
+        # 101 -> 99
+        self.down01 = nn.Conv2d(num_features*1, num_features*1, kernel_size=3, stride=1, padding=0, bias=False)
+
+        self.block12 = Block(num_features*1, num_features*2, num_residuals=num_residuals, gated=gated, gate_param=gate_param)
+        # 99 -> 33
+        self.down12 = nn.Conv2d(num_features*2, num_features*2, kernel_size=3, stride=3, padding=0, bias=False)
+
+        self.block23 = Block(num_features*2, num_features*4, num_residuals=num_residuals, gated=gated, gate_param=gate_param)
+        # 33 -> 11
+        self.down23 = nn.Conv2d(num_features*4, num_features*4, kernel_size=3, stride=3, padding=0, bias=False)
+
+        self.block34 = Block(num_features*4, num_features*8, num_residuals=num_residuals, gated=gated, gate_param=gate_param)
+        # 11 -> 9
+        self.down34 = nn.Conv2d(num_features*8, num_features*8, kernel_size=3, stride=1, padding=0, bias=False)
+
+        # middle
+        self.block44 = Block(num_features*8, num_features*16, num_residuals=num_residuals, gated=gated, gate_param=gate_param)
+
+        # 9 -> 11
+        self.up43 = nn.ConvTranspose2d(num_features*16, num_features*8, kernel_size=3, stride=1, padding=0, bias=False)
+        self.block43 = Block(num_features*16, num_features*8, num_residuals=num_residuals, gated=gated, gate_param=gate_param)
+
+        # 11 -> 33
+        self.up32 = nn.ConvTranspose2d(num_features*8, num_features*4, kernel_size=3, stride=3, padding=0, bias=False)
+        self.block32 = Block(num_features*8, num_features*4, num_residuals=num_residuals, gated=gated, gate_param=gate_param)
+
+        # 33 -> 99
+        self.up21 = nn.ConvTranspose2d(num_features*4, num_features*2, kernel_size=3, stride=3, padding=0, bias=False)
+        self.block21 = Block(num_features*4, num_features*2, num_residuals=num_residuals, gated=gated, gate_param=gate_param)
+
+        # 99 -> 101
+        self.up10 = nn.ConvTranspose2d(num_features*2, num_features*1, kernel_size=3, stride=1, padding=0, bias=False)
+        self.block10 = Block(num_features*2, num_features*1, num_residuals=num_residuals, gated=gated, gate_param=gate_param)
+
+        self.final_conv = nn.Conv2d(num_features*1, 1, kernel_size=1, stride=1, padding=0, bias=True)
+        self.final_acti = nn.Sigmoid()
+
+    def forward(self, x):
+        b01 = self.block01(x)
+        d01 = self.down01(b01)  # 101 -> 99
+        b12 = self.block12(d01)
+        d12 = self.down12(b12)  # 99 -> 33
+        b23 = self.block23(d12)
+        d23 = self.down23(b23)  # 33 -> 11
+        b34 = self.block34(d23)
+        d34 = self.down34(b34)  # 11 -> 9
+        b44 = self.block44(d34)  # middle
+        u43 = self.up43(b44)  # 9 -> 11
+        u43 = torch.cat([u43,b34], dim=1)
+        b43 = self.block43(u43)
+        u32 = self.up32(b43)  # 11 -> 33
+        u32 = torch.cat([u32,b23], dim=1)
+        b32 = self.block32(u32)
+        u21 = self.up21(b32)  # 33 -> 99
+        u21 = torch.cat([u21,b12], dim=1)
+        b21 = self.block21(u21)
+        u10 = self.up10(b21)  # 99 -> 101
+        y = self.final_acti(self.final_conv(u10))
+        return y
+
+class Unetv2(Unetv1):
+    def __init__(self, num_features, num_residuals=2, gated=False, gate_param=0.):
+        Unetv1.__init__(self, num_features, num_residuals=2, gated=False, gate_param=0.)
+
+        self.up32 = InterpolateConvLayer(num_features*8, num_features*4, scale_factor=3)
+        self.up21 = InterpolateConvLayer(num_features*4, num_features*2, scale_factor=3)
+
+class Unetv3(Unetv2):
+    def __init__(self, num_features, num_residuals=2, gated=False, gate_param=0.):
+        Unetv2.__init__(self, num_features, num_residuals=2, gated=False, gate_param=0.)
+
+        self.down12 = nn.MaxPool2d(3)
+        self.down23 = nn.MaxPool2d(3)
+
+class Unetv4(Unetv2):
+    def __init__(self, num_features, num_residuals=2, gated=False, gate_param=0.):
+        Unetv2.__init__(self, num_features, num_residuals=2, gated=False, gate_param=0.)
+
+        self.down12 = InterpolateLayer(scale_factor=1./3)
+        self.down23 = InterpolateLayer(scale_factor=1./3)
+
+choiceG = {'v0':Unetv0, 'v1':Unetv1, 'v2':Unetv2, 'v3':Unetv3, 'v4':Unetv4}
 
 class DCGAN_Dv0(nn.Module):
     def __init__(self, num_features, nc=2, dropout=0):

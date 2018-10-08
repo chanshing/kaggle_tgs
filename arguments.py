@@ -15,6 +15,7 @@ class BaseParser(argparse.ArgumentParser):
         self.add_argument('--rho', type=float, default=1e-3, help='quadratic weight penalty')
         self.add_argument('--bce_weight', type=float, default=1.)
         self.add_argument('--add_bce', action='store_true')
+        self.add_argument('--archG', default='v0')
         self.add_argument('--archD', default='v0')
         self.add_argument('--num_features_D', type=int, default=4)
         self.add_argument('--dropout', type=float, default=0)
