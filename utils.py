@@ -5,13 +5,11 @@ import scipy.stats as stats
 # from scipy.signal import medfilt
 from itertools import izip
 
-# import skimage
 from skimage import transform as stf
 from skimage import io
 # import pandas
 import sklearn
 from sklearn.model_selection import train_test_split
-# import skimage.transform as ST
 
 import torch
 from torch.utils.data import Dataset
@@ -74,45 +72,16 @@ class RandomHorizontalFlip(object):
             mask = mask[:,:,::-1].copy()
         return (image, mask)
 
-def data_augment(images, masks, rotate=True, shuffle=True, random_state=42):
-    # _images = images[:,:,:,::-1]
-    # _masks = masks[:,:,:,::-1]
-    # images = np.concatenate([images, _images], axis=0)
-    # masks = np.concatenate([masks, _masks], axis=0)
-
-    images, masks = images.squeeze(), masks.squeeze()
-
-    # persistant horizontal flips
-    images_hflip = images[:,:,::-1]
-    masks_hflip = masks[:,:,::-1]
-    images = np.concatenate([images, images_hflip])
-    masks = np.concatenate([masks, masks_hflip])
-    _images, _masks = [images], [masks]
-
-    # rotations
-    if rotate:
-        images_rot1 = batch_rotate(images, 5, mode='reflect').astype(np.float32)
-        masks_rot1 = batch_rotate(masks, 5, mode='reflect').astype(np.float32)
-        images_rot2 = batch_rotate(images, -5, mode='reflect').astype(np.float32)
-        masks_rot2 = batch_rotate(masks, -5, mode='reflect').astype(np.float32)
-        _images.append(images_rot1)
-        _images.append(images_rot2)
-        _masks.append(masks_rot1)
-        _masks.append(masks_rot2)
-
-    # images = np.concatenate([images, images_hflip, images_rot1, images_rot2], axis=0)
-    # masks = np.concatenate([masks, masks_hflip, masks_rot1, masks_rot2], axis=0)
-    _images = np.concatenate(_images, axis=0)
-    _masks = np.concatenate(_masks, axis=0)
-
-    _images, _masks = np.expand_dims(_images, 1), np.expand_dims(_masks, 1)
+def concatenate_hflips(images, masks, shuffle=True, random_state=42):
+    _images = images[:,:,:,::-1]
+    _masks = masks[:,:,:,::-1]
+    images = np.concatenate([images, _images], axis=0)
+    masks = np.concatenate([masks, _masks], axis=0)
 
     if shuffle:
-        _images, _masks = sklearn.utils.shuffle(_images, _masks, random_state=random_state)
+        images, masks = sklearn.utils.shuffle(images, masks, random_state=random_state)
 
-    print _images.shape, _masks.shape
-
-    return _images, _masks
+    return images, masks
 
 def batch_rotate(img, angle=15, mode='reflect'):
     """ (batch_size, h, w) """
@@ -240,11 +209,10 @@ def augment(
             else:
                 shear = 0
 
-            tf_augment = stf.AffineTransform(scale=scale, rotation=np.deg2rad(rotation), translation=translation, shear=np.deg2rad(shear))
-            tf = tf_augment
+            tform = stf.AffineTransform(scale=scale, rotation=np.deg2rad(rotation), translation=translation, shear=np.deg2rad(shear))
 
-            x1 = stf.warp(x1, tf, order=1, preserve_range=True, mode='symmetric')
-            x2 = stf.warp(x2, tf, order=1, preserve_range=True, mode='symmetric')
+            x1 = stf.warp(x1, tform, order=1, preserve_range=True, mode='symmetric')
+            x2 = stf.warp(x2, tform, order=1, preserve_range=True, mode='symmetric')
 
             x1, x2 = x1.astype(np.float32), x2.astype(np.float32)
 
