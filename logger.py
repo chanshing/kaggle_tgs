@@ -24,6 +24,9 @@ class Logger(object):
         self.scores_train = []
         self.scores_test = []
 
+    def to(self, device):
+        self.device = device
+
     def flush(self, i):
         self.num_iters.append(i)
         self.eval_netG()
@@ -120,3 +123,21 @@ class LoggerGAN(LoggerBCE):
         np.save('{}/ipms.npy'.format(self.outf), np.array(self.ipms))
         np.save('{}/alphas.npy'.format(self.outf), np.array(self.alphas))
         np.save('{}/omegas.npy'.format(self.outf), np.array(self.omegas))
+
+class LoggerFullGAN(LoggerGAN):
+    """ Extend LoggerGAN to include netG """
+    def __init__(self, outf, netF, netG, z, images_train, masks_train, images_test, masks_test, bcefunc):
+        LoggerGAN.__init__(self, outf, netF, images_train, masks_train, images_test, masks_test, bcefunc)
+        self.netG = netG
+        self.z = z
+
+    def show_generated(self, i):
+        self.netG.eval()
+        with torch.no_grad():
+            images = self.netG(self.z)
+        self.netG.train()
+        vutils.save_image(images, '{}/generated_images_{}.png'.format(self.outf, i), nrow=4)
+
+    def flush(self, i):
+        LoggerGAN.flush(self, i)
+        self.show_generated(i)
