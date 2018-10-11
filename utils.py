@@ -150,17 +150,23 @@ def get_score(masks, masks_pred, threshold=0.5):
     masks = masks > threshold
 
     iou_cuts = np.arange(0.5, 1, 0.05)
-    scores = []
 
-    for m, mp in izip(masks, masks_pred):
-        intersection = np.logical_and(m, mp)
-        union = np.logical_or(m, mp)
-        if np.any(union):
-            iou = float(np.sum(intersection)) / (np.sum(union) + 1e-16)
-        else:
-            iou = 1.0
+    # scores = []
+    # for m, mp in izip(masks, masks_pred):
+    #     intersection = np.logical_and(m, mp)
+    #     union = np.logical_or(m, mp)
+    #     if np.any(union):
+    #         iou = float(np.sum(intersection)) / (np.sum(union) + 1e-16)
+    #     else:
+    #         iou = 1.0
+    #     scores.append(np.mean(iou > iou_cuts))
 
-        scores.append(np.mean(iou > iou_cuts))
+    n = masks.shape[0]
+    intersection = np.logical_and(masks, masks_pred).reshape(n,-1)
+    union = np.logical_or(masks, masks_pred).reshape(n,-1)
+    ious = (np.sum(intersection, axis=-1) + 1e-8) / (np.sum(union, axis=-1) + 1e-8)
+
+    scores = np.mean(ious.reshape(n,1) > iou_cuts, axis=-1)
 
     return np.mean(scores)
 
@@ -220,16 +226,26 @@ def augment(
 
     return call
 
-def batch_eval(netG, images, batch_size=128):
+def batch_eval(net, dataset, batch_size=128, device=torch.device('cpu')):
     # eval by batches to not blow up memory
-    masks = []
-    for img in batch_looper(images, batch_size=batch_size):
-        msk = netG(img)
-        masks.append(msk)
-    masks = torch.cat(masks, dim=0)
-    return masks
+    results = [net(x.to(device)) for x in batch_looper(dataset, batch_size=batch_size)]
+    results = torch.cat(results, dim=0)
+    return results
 
 def batch_looper(alist, batch_size=1):
     l = len(alist)
     for ndx in range(0, l, batch_size):
         yield alist[ndx:min(ndx + batch_size, l)]
+
+def BatchEval(object):
+    def __init__(self, net, batch_size=128, device=torch.device('cpu')):
+        self.net = net
+        self.batch_size = batch_size
+
+    def __call__(self, dataset):
+        self.net.eval()
+        with torch.no_grad():
+            results = [self.net(torch.from_numpy(x).to(self.device)) for x in batch_looper(dataset, batch_size=self.batch_size)]
+            results = torch.cat(results, dim=0)
+        self.net.train()
+        return results
