@@ -106,7 +106,7 @@ class ResidualBlock(nn.Module):
             return x + y
 
 class Block(nn.Module):
-    def __init__(self, in_channels, out_channels, num_residuals=2, gated=False, gate_param=0., batchnorm=True, activaton='relu'):
+    def __init__(self, in_channels, out_channels, num_residuals=2, gated=False, gate_param=0., batchnorm=True, activation='relu'):
         super(Block, self).__init__()
 
         choice_activation = {'relu':lambda:nn.ReLU(True), 'leaky':lambda:nn.LeakyReLU(0.2, True)}
@@ -123,8 +123,7 @@ class Block(nn.Module):
         if batchnorm:
             main.add_module('bn_{}'.format(out_channels), nn.BatchNorm2d(out_channels))
 
-        # main.add_module('relu_{}'.format(out_channels), nn.ReLU(True))
-        main.add_module('acti_{}'.format(out_channels), choice_activation[activaton]())
+        main.add_module('acti_{}'.format(out_channels), choice_activation[activation]())
 
         self.main = main
 
@@ -551,7 +550,7 @@ class UnetPhi(nn.Module):
         self.down12 = nn.MaxPool2d(3)
         self.dropout12 = nn.Dropout(dropout)
 
-        self.block23 = Block(num_features*2, num_features*4, num_residuals=num_residuals, gated=gated, gate_param=gate_param, batchnorm=False, activaton='leaky')
+        self.block23 = Block(num_features*2, num_features*4, num_residuals=num_residuals, gated=gated, gate_param=gate_param, batchnorm=False, activation='leaky')
         # 33 -> 11
         self.down23 = nn.MaxPool2d(3)
         self.dropout23 = nn.Dropout(dropout)
@@ -615,3 +614,26 @@ class UnetPhi(nn.Module):
         u10 = self.dropout10(u10)
         b10 = self.block10(u10)
         return b10
+
+class UnetD(nn.Module):
+    def __init__(self, num_features, num_residuals=2, gated=False, gate_param=0., dropout=0.2):
+        super(UnetD, self).__init__()
+
+        self.main = UnetPhi(num_features, num_residuals=num_residuals, gated=gated, gate_param=gate_param, dropout=dropout)
+        self.s = nn.Conv2d(num_features, 1, kernel_size=1, stride=1, padding=0, bias=True)
+        self.v = nn.Conv2d(num_features, 1, kernel_size=1, stride=1, padding=0, bias=True)
+
+    def forward(self, x, classifier=False):
+        phi = self.main(x)
+        sphi = self.s(phi)
+        if classifier:
+            return sphi
+        else:
+            vphi = self.v(phi)
+            psphi = self.get_pysphi(sphi)
+            # y = (psphi - vphi).view(x.size(0), -1).mean(-1, keepdim=True)
+            y = psphi - vphi
+            return y, psphi, vphi
+
+    def get_psphi(self, sphi):
+        return sphi * (1 + 2*F.sigmoid(2*sphi))
