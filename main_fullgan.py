@@ -67,7 +67,7 @@ def main(args):
         for _ in range(niterD):
             optimizerD.zero_grad()
 
-            images_fake = netG(z.normal_())
+            images_fake = netG(z.normal_()).detach()
             masks_fake = netF(images_fake).detach()
             x_fake = torch.cat((images_fake, masks_fake), dim=1)
 
