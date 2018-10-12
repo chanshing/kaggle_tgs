@@ -32,33 +32,39 @@ def main(args):
     dataiter = utils.dataiterator(dataloader)
 
     netF = models.choiceF[args.archF](num_features=args.num_features_F, num_residuals=args.num_residuals, gated=args.gated, gate_param=args.gate_param).to(device)
-    netD = models.choiceD[args.archD](num_features=args.num_features_D, dropout=args.dropout).to(device)
-    netG = models.DCGAN_G(num_features=args.num_features_G, nz=args.nz).to(device)
+    netD = models.choiceD[args.archD](num_features=args.num_features_D, nc=2, dropout=args.dropout).to(device)
+    netG = models.choiceG[args.archG](num_features=args.num_features_G, nz=args.nz).to(device)
     z = torch.FloatTensor(args.batch_size, args.nz, 1, 1).to(device)
+    if args.netF:
+        netF.load_state_dict(torch.load(args.netF))
+    if args.netG:
+        netG.load_state_dict(torch.load(args.netG))
+    if args.netD:
+        netD.load_state_dict(torch.load(args.netD))
     print netF
     print netD
     print netG
-    optimizerF = optim.Adam(netF.parameters(), lr=args.lr, amsgrad=True)
+    optimizerF = optim.Adam(netF.parameters(), betas=(0.5, 0.999), lr=args.lr, amsgrad=True)
     optimizerD = optim.Adam(netD.parameters(), betas=(0.5, 0.999), lr=args.lr, amsgrad=True)
     optimizerG = optim.Adam(netG.parameters(), betas=(0.5, 0.999), lr=args.lr, amsgrad=True)
     alpha = torch.tensor(args.alpha).to(device)
     loss_func = torch.nn.BCELoss()
 
-    smooth_binary = utils.SmoothBinary(scale=0.1)
+    smooth_binary = utils.SmoothBinary(scale=args.smooth_noise)
 
-    images_test, masks_test = torch.from_numpy(images_test).to(device), torch.from_numpy(masks_test).to(device)
-    log = logger.LoggerFullGAN(args.outf, netF, netG, torch.randn(16, args.nz, 1, 1).to(device),
-                               torch.from_numpy(images_train[:512]).to(device), torch.from_numpy(masks_train[:512]).to(device), images_test, masks_test, bcefunc=loss_func)
+    # images_test, masks_test = torch.from_numpy(images_test).to(device), torch.from_numpy(masks_test).to(device)
+    log = logger.LoggerFullGAN(args.outf, netF, netD, netG, args.nz, torch.from_numpy(images_train), torch.from_numpy(masks_train), torch.from_numpy(images_test), torch.from_numpy(masks_test), bcefunc=loss_func, device=device)
 
     start_time = time.time()
     for i in range(args.niter):
 
         # --- train D
-        for _ in range(args.niterD):
+        niterD = args.niterD0 if i==0 else args.niterD
+        for _ in range(niterD):
             optimizerD.zero_grad()
 
             images_fake = netG(z.normal_())
-            masks_fake = netF(images_fake)
+            masks_fake = netF(images_fake).detach()
             x_fake = torch.cat((images_fake, masks_fake), dim=1)
 
             images_real, masks_real = next(dataiter)
@@ -105,7 +111,7 @@ def main(args):
         optimizerF.step()
         optimizerG.step()
 
-        log.dump(lossE.item(), alpha.item(), omega.item())
+        log.dump(i+1, lossE.item(), alpha.item(), omega.item())
 
         if (i+1) % args.nprint == 0:
             print 'Time per loop: {} sec/loop'.format((time.time() - start_time)/args.nprint)
@@ -114,9 +120,9 @@ def main(args):
 
             log.flush(i+1)
 
-            if (i+1) > 20000:
-                torch.save(netF.state_dict(), '{}/netF_iter_{}.pth'.format(args.outf, i+1))
-                torch.save(netD.state_dict(), '{}/netD_iter_{}.pth'.format(args.outf, i+1))
+            torch.save(netF.state_dict(), '{}/netF_iter_{}.pth'.format(args.outf, i+1))
+            torch.save(netD.state_dict(), '{}/netD_iter_{}.pth'.format(args.outf, i+1))
+            torch.save(netG.state_dict(), '{}/netG_iter_{}.pth'.format(args.outf, i+1))
 
             start_time = time.time()
 
@@ -129,10 +135,15 @@ if __name__ == '__main__':
         print "Running quick test..."
         args.outf = '{}/tmp'.format(args.outf)
         args.niter = 30
+        args.niterD = 2
+        args.niterD0 = 2
         args.nprint = 10
         args.batch_size = 8
-        args.num_features_D = 2
-        args.num_features_F = 2
-        args.num_features_G = 2
+        if not args.netD:
+            args.num_features_D = 2
+        if not args.netF:
+            args.num_features_F = 2
+        if not args.netG:
+            args.num_features_G = 2
 
     main(args)
