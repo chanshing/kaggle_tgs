@@ -104,7 +104,7 @@ class Block(nn.Module):
         return self.main(x)
 
 class Unetv0(nn.Module):
-    def __init__(self, num_features, num_residuals=2, gated=False, gate_param=0.):
+    def __init__(self, num_features, num_residuals=2, gated=False, gate_param=0., sigmoid=True):
         super(Unetv0, self).__init__()
 
         self.block01 = Block(1, num_features*1, num_residuals=2, gated=gated, gate_param=gate_param)
@@ -145,6 +145,8 @@ class Unetv0(nn.Module):
         self.final_conv = nn.Conv2d(num_features*1, 1, kernel_size=1, stride=1, padding=0, bias=True)
         self.final_acti = nn.Sigmoid()
 
+        self.sigmoid = sigmoid
+
     def forward(self, x):
         b01 = self.block01(x)
         d01 = self.down01(b01)  # 101 -> 50
@@ -165,12 +167,15 @@ class Unetv0(nn.Module):
         u21 = torch.cat([u21,b12], dim=1)
         b21 = self.block21(u21)
         u10 = self.up10(b21)  # 50 -> 101
-        y = self.final_acti(self.final_conv(u10))
+        # y = self.final_acti(self.final_conv(u10))
+        y = self.final_conv(u10)
+        if self.sigmoid:
+            y = self.final_acti(y)
         return y
 
 class Unetv0a(Unetv0):
-    def __init__(self, num_features, num_residuals=2, gated=False, gate_param=0.):
-        Unetv0.__init__(self, num_features, num_residuals, gated, gate_param)
+    def __init__(self, num_features, num_residuals=2, gated=False, gate_param=0., sigmoid=True):
+        Unetv0.__init__(self, num_features, num_residuals, gated, gate_param, sigmoid)
         self.down01 = nn.Conv2d(num_features*1, num_features*1, kernel_size=3, stride=2, padding=0, bias=False)
         self.down12 = nn.Conv2d(num_features*2, num_features*2, kernel_size=2, stride=2, padding=0, bias=False)
         self.down23 = nn.Conv2d(num_features*4, num_features*4, kernel_size=3, stride=2, padding=0, bias=False)
@@ -242,8 +247,8 @@ class Unetv0a(Unetv0):
 #         return y
 
 class Unetv1(Unetv0):
-    def __init__(self, num_features, num_residuals=2, gated=False, gate_param=0.):
-        Unetv0.__init__(self, num_features, num_residuals, gated, gate_param)
+    def __init__(self, num_features, num_residuals=2, gated=False, gate_param=0., sigmoid=True):
+        Unetv0.__init__(self, num_features, num_residuals, gated, gate_param, sigmoid)
 
         # 101 -> 99
         self.down01 = nn.Conv2d(num_features*1, num_features*1, kernel_size=3, stride=1, padding=0, bias=False)
@@ -263,8 +268,8 @@ class Unetv1(Unetv0):
         self.up10 = nn.ConvTranspose2d(num_features*2, num_features*1, kernel_size=3, stride=1, padding=0, bias=False)
 
 class Unetv1a(Unetv1):
-    def __init__(self, num_features, num_residuals=2, gated=False, gate_param=0.):
-        Unetv1.__init__(self, num_features, num_residuals, gated, gate_param)
+    def __init__(self, num_features, num_residuals=2, gated=False, gate_param=0., sigmoid=True):
+        Unetv1.__init__(self, num_features, num_residuals, gated, gate_param, sigmoid)
 
         self.down12 = nn.Conv2d(num_features*2, num_features*2, kernel_size=3, stride=3, padding=0, bias=False)
         self.down23 = nn.Conv2d(num_features*4, num_features*4, kernel_size=3, stride=3, padding=0, bias=False)
@@ -297,7 +302,7 @@ class DCGAN_Dv0(nn.Module):
 
     def forward(self, x):
         x = 2.0 * (x - 0.5)  # [0,1] -> [-1,1]
-        return self.main(x)
+        return self.main(x).view(-1,1)
 
 class DCGAN_Dv0a(DCGAN_Dv0):
     def __init__(self, num_features, nc=1, dropout=0):
@@ -306,7 +311,7 @@ class DCGAN_Dv0a(DCGAN_Dv0):
     def forward(self, x):
         x1, x2 = x[:,0,:,:].unsqueeze(1), x[:,1,:,:].unsqueeze(1)
         x = (x1 * x2)
-        return self.main(x).view(-1,1)
+        return DCGAN_Dv0.forward(self, x)
 
 class DCGAN_Dv0b(DCGAN_Dv0):
     def __init__(self, num_features, nc=2, dropout=0):
@@ -315,7 +320,7 @@ class DCGAN_Dv0b(DCGAN_Dv0):
     def forward(self, x):
         x1, x2 = x[:,0,:,:].unsqueeze(1), x[:,1,:,:].unsqueeze(1)
         x = torch.cat((x1, (x1*x2)), dim=1)
-        return self.main(x).view(-1,1)
+        return DCGAN_Dv0.forward(self, x)
 
 class DCGAN_Dv1(nn.Module):
     """ Like v0 but conv instead of downsampleconv """
@@ -344,7 +349,7 @@ class DCGAN_Dv1(nn.Module):
 
     def forward(self, x):
         x = 2.0 * (x - 0.5)  # [0,1] -> [-1,1]
-        return self.main(x)
+        return self.main(x).view(-1,1)
 
 class DCGAN_Dv1a(DCGAN_Dv1):
     def __init__(self, num_features, nc=1, dropout=0):
@@ -353,7 +358,7 @@ class DCGAN_Dv1a(DCGAN_Dv1):
     def forward(self, x):
         x1, x2 = x[:,0,:,:].unsqueeze(1), x[:,1,:,:].unsqueeze(1)
         x = (x1 * x2)
-        return self.main(x).view(-1,1)
+        DCGAN_Dv1.forward(self, x)
 
 class DCGAN_Dv1b(DCGAN_Dv1):
     def __init__(self, num_features, nc=2, dropout=0):
@@ -362,14 +367,11 @@ class DCGAN_Dv1b(DCGAN_Dv1):
     def forward(self, x):
         x1, x2 = x[:,0,:,:].unsqueeze(1), x[:,1,:,:].unsqueeze(1)
         x = torch.cat((x1, (x1*x2)), dim=1)
-        return self.main(x).view(-1,1)
+        DCGAN_Dv1.forward(self, x)
 
-choiceD = {'v0':DCGAN_Dv0, 'v0a':DCGAN_Dv0a, 'v0b':DCGAN_Dv0b,
-           'v1':DCGAN_Dv1, 'v1a':DCGAN_Dv1a, 'v1b':DCGAN_Dv1b}
-
-class DCGAN_G(nn.Module):
+class DCGAN_Gv0(nn.Module):
     def __init__(self, num_features, nz, nc=1):
-        super(DCGAN_G, self).__init__()
+        super(DCGAN_Gv0, self).__init__()
 
         main = nn.Sequential(
             # 1 -> 9
@@ -398,3 +400,120 @@ class DCGAN_G(nn.Module):
         x = self.main(z)
         x = 0.5 * (x + 1.0)  # [-1,1] -> [0,1]
         return x
+
+class DCGAN_Gv0a(nn.Module):
+    def __init__(self, num_features, nz, nc=1):
+        super(DCGAN_Gv0a, self).__init__()
+
+        main = nn.Sequential(
+            # 1 -> 9
+            nn.ConvTranspose2d(nz, num_features*8, 9, 1, 0, bias=False),
+            nn.BatchNorm2d(num_features*8),
+            nn.ReLU(True),
+            # 9 -> 11
+            nn.ConvTranspose2d(num_features*8, num_features*4, 3, 1, 0, bias=False),
+            nn.BatchNorm2d(num_features*4),
+            nn.ReLU(True),
+            # 11 -> 33
+            nn.ConvTranspose2d(num_features*4, num_features*2, 3, 3, 0, bias=False),
+            nn.BatchNorm2d(num_features*2),
+            nn.ReLU(True),
+            # 33 -> 99
+            nn.ConvTranspose2d(num_features*2, num_features*1, 3, 3, 0, bias=False),
+            nn.BatchNorm2d(num_features*1),
+            nn.ReLU(True),
+            # 99 -> 101
+            nn.ConvTranspose2d(num_features*1, nc, 3, 1, 0, bias=False),
+            nn.Tanh()
+        )
+        self.main = main
+
+    def forward(self, z):
+        x = self.main(z)
+        x = 0.5 * (x + 1.0)  # [-1,1] -> [0,1]
+        return x
+
+class DCGAN_Gv1(nn.Module):
+    def __init__(self, num_features, nz, nc=1, output_size=101):
+        super(DCGAN_Gv1, self).__init__()
+
+        main = nn.Sequential(
+            # 1 -> 4
+            nn.ConvTranspose2d(nz, num_features*16, 4, 1, 0, bias=False),
+            nn.BatchNorm2d(num_features*16),
+            nn.ReLU(True),
+            # 4 -> 8
+            UpsampleConvLayer(num_features*16, num_features*8, bias=False, scale_factor=2),
+            nn.BatchNorm2d(num_features*8),
+            nn.ReLU(True),
+            # 8 -> 16
+            UpsampleConvLayer(num_features*8, num_features*4, bias=False, scale_factor=2),
+            nn.BatchNorm2d(num_features*4),
+            nn.ReLU(True),
+            # 16 -> 32
+            UpsampleConvLayer(num_features*4, num_features*2, bias=False, scale_factor=2),
+            nn.BatchNorm2d(num_features*2),
+            nn.ReLU(True),
+            # 32 -> 64
+            UpsampleConvLayer(num_features*2, num_features*1, bias=False, scale_factor=2),
+            nn.BatchNorm2d(num_features*1),
+            nn.ReLU(True),
+            # 64 -> 128
+            UpsampleConvLayer(num_features*1, nc, bias=False, scale_factor=2),
+            nn.Tanh(),
+            InterpolateLayer(size=output_size)
+        )
+        self.main = main
+
+    def forward(self, z):
+        x = self.main(z)
+        x = 0.5 * (x + 1.0)  # [-1,1] -> [0,1]
+        return x
+
+class DCGAN_Dv2(nn.Module):
+    def __init__(self, num_features, nc, input_size=128, dropout=0):
+        super(DCGAN_Dv2, self).__init__()
+
+        main = nn.Sequential(
+            InterpolateLayer(size=input_size),
+            # 128 -> 64
+            nn.Conv2d(nc, num_features*1, 4, 2, 1, bias=False),
+            nn.LeakyReLU(0.2, True),
+            # 64 -> 32
+            nn.Conv2d(num_features*1, num_features*2, 4, 2, 1, bias=False),
+            nn.LeakyReLU(0.2, True),
+            nn.Dropout(dropout),
+            # 32 -> 16
+            nn.Conv2d(num_features*2, num_features*4, 4, 2, 1, bias=False),
+            nn.LeakyReLU(0.2, True),
+            # 16 -> 8
+            nn.Conv2d(num_features*4, num_features*8, 4, 2, 1, bias=False),
+            nn.LeakyReLU(0.2, True),
+            nn.Dropout(dropout),
+            # 8 -> 4
+            nn.Conv2d(num_features*8, num_features*16, 4, 2, 1, bias=False),
+            nn.LeakyReLU(0.2, True),
+            # 4 -> 1
+            nn.Conv2d(num_features*16, 1, 4, 1, 0, bias=False)
+        )
+        self.main = main
+
+    def forward(self, x):
+        x = 2.0 * (x - 0.5)  # [0,1] -> [-1,1]
+        return self.main(x)
+
+choiceG = {'v0':DCGAN_Gv0, 'v0a':DCGAN_Gv0a, 'v1':DCGAN_Gv1}
+choiceD = {'v0':DCGAN_Dv0, 'v0a':DCGAN_Dv0a, 'v0b':DCGAN_Dv0b,
+           'v1':DCGAN_Dv1, 'v1a':DCGAN_Dv1a, 'v1b':DCGAN_Dv1b,
+           'v2':DCGAN_Dv2}
+
+# class DCGAN_Dv2XL(nn.Module):
+#     def __init__(self, num_features, nc, input_size=128, dropout=0):
+#         super(DCGAN_Dv2XL, self).__init__()
+
+#         main = DCGAN_Dv2(num_features=num_features, nc=1, input_size=input_size, dropout=dropout)
+#         self.main = main
+
+#     def forward(self, x):
+#         x = 2.0 * (x - 0.5)  # [0,1] -> [-1,1]
+#         return self.main(x)
