@@ -53,6 +53,9 @@ def main(args):
     for i in range(args.niter):
 
         # --- train D
+        for p in netD.parameters():
+            p.requires_grad_(True)
+
         for _ in range(args.niterD):
             optimizerD.zero_grad()
 
@@ -85,6 +88,8 @@ def main(args):
             alpha -= args.rho*(1.0 - omega.item())
 
         # --- train G
+        for p in netD.parameters():
+            p.requires_grad_(False)
         optimizerF.zero_grad()
         images_real, masks_real = next(dataiter)
         images_real, masks_real = images_real.to(device), masks_real.to(device)
