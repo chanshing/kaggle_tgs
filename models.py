@@ -64,7 +64,7 @@ class InterpolateLayer(nn.Module):
         return x
 
 class ResidualBlock(nn.Module):
-    def __init__(self, num_features, gated=False, gate_param=0., batchnorm=True):
+    def __init__(self, num_features, gated=False, gate_param=0., batchnorm=True, activation='relu'):
         super(ResidualBlock, self).__init__()
 
         # self.main = nn.Sequential(
@@ -76,22 +76,25 @@ class ResidualBlock(nn.Module):
         #     ConvLayer(num_features, num_features, kernel_size=3, stride=1, padding=1, bias=True)
         # )
 
+        choice_activation = {'relu':lambda:nn.ReLU(True), 'leaky':lambda:nn.LeakyReLU(0.2, True)}
+
         main = nn.Sequential()
 
         if batchnorm:
             main.add_module('bn1_{}'.format(num_features), nn.BatchNorm2d(num_features))
 
-        main.add_module('relu1_{}'.format(num_features), nn.ReLU(True))
+        main.add_module('acti1_{}'.format(num_features), choice_activation[activation]())
         main.add_module('conv1_{}_{}'.format(num_features, num_features),
                         ConvLayer(num_features, num_features, kernel_size=3, stride=1, padding=1, bias=True))
 
         if batchnorm:
             main.add_module('bn2_{}'.format(num_features), nn.BatchNorm2d(num_features))
 
-        main.add_module('relu2_{}'.format(num_features), nn.ReLU(True))
+        main.add_module('acti2_{}'.format(num_features), choice_activation[activation]())
         main.add_module('conv2_{}_{}'.format(num_features, num_features),
                         ConvLayer(num_features, num_features, kernel_size=3, stride=1, padding=1, bias=True))
 
+        self.main = main
         self.gate_param = nn.Parameter(torch.tensor(gate_param))
         self.gated = gated
 
@@ -103,8 +106,11 @@ class ResidualBlock(nn.Module):
             return x + y
 
 class Block(nn.Module):
-    def __init__(self, in_channels, out_channels, num_residuals=2, gated=False, gate_param=0., batchnorm=True):
+    def __init__(self, in_channels, out_channels, num_residuals=2, gated=False, gate_param=0., batchnorm=True, activaton='relu'):
         super(Block, self).__init__()
+
+        choice_activation = {'relu':lambda:nn.ReLU(True), 'leaky':lambda:nn.LeakyReLU(0.2, True)}
+
         main = nn.Sequential()
 
         main.add_module('conv_{}_{}'.format(in_channels, out_channels),
@@ -117,7 +123,8 @@ class Block(nn.Module):
         if batchnorm:
             main.add_module('bn_{}'.format(out_channels), nn.BatchNorm2d(out_channels))
 
-        main.add_module('relu_{}'.format(out_channels), nn.ReLU(True))
+        # main.add_module('relu_{}'.format(out_channels), nn.ReLU(True))
+        main.add_module('acti_{}'.format(out_channels), choice_activation[activaton]())
 
         self.main = main
 
@@ -531,51 +538,51 @@ choiceD = {'v0':DCGAN_Dv0, 'v0a':DCGAN_Dv0a, 'v0b':DCGAN_Dv0b,
            'v2':DCGAN_Dv2}
 
 class UnetPhi(nn.Module):
-    def __init__(self, num_features, num_residuals=2, gated=False, gate_param=0., dropout=0):
+    def __init__(self, num_features, num_residuals=2, gated=False, gate_param=0., dropout=0.2):
         super(UnetPhi, self).__init__()
 
-        self.block01 = Block(1, num_features*1, num_residuals=2, gated=gated, gate_param=gate_param, batchnorm=False)
+        self.block01 = Block(1, num_features*1, num_residuals=2, gated=gated, gate_param=gate_param, batchnorm=False, activation='leaky')
         # 101 -> 99
         self.down01 = nn.Conv2d(num_features*1, num_features*1, kernel_size=3, stride=1, padding=0, bias=False)
         self.dropout01 = nn.Dropout(dropout)
 
-        self.block12 = Block(num_features*1, num_features*2, num_residuals=num_residuals, gated=gated, gate_param=gate_param, batchnorm=False)
+        self.block12 = Block(num_features*1, num_features*2, num_residuals=num_residuals, gated=gated, gate_param=gate_param, batchnorm=False, activation='leaky')
         # 99 -> 33
         self.down12 = nn.MaxPool2d(3)
         self.dropout12 = nn.Dropout(dropout)
 
-        self.block23 = Block(num_features*2, num_features*4, num_residuals=num_residuals, gated=gated, gate_param=gate_param)
+        self.block23 = Block(num_features*2, num_features*4, num_residuals=num_residuals, gated=gated, gate_param=gate_param, batchnorm=False, activaton='leaky')
         # 33 -> 11
         self.down23 = nn.MaxPool2d(3)
         self.dropout23 = nn.Dropout(dropout)
 
-        self.block34 = Block(num_features*4, num_features*8, num_residuals=num_residuals, gated=gated, gate_param=gate_param)
+        self.block34 = Block(num_features*4, num_features*8, num_residuals=num_residuals, gated=gated, gate_param=gate_param, batchnorm=False, activation='leaky')
         # 11 -> 9
         self.down34 = nn.Conv2d(num_features*8, num_features*8, kernel_size=3, stride=1, padding=0, bias=False)
         self.dropout34 = nn.Dropout(dropout)
 
         # middle
-        self.block44 = Block(num_features*8, num_features*16, num_residuals=num_residuals, gated=gated, gate_param=gate_param)
+        self.block44 = Block(num_features*8, num_features*16, num_residuals=num_residuals, gated=gated, gate_param=gate_param, batchnorm=False, activation='leaky')
 
         # 9 -> 11
         self.up43 = nn.ConvTranspose2d(num_features*16, num_features*8, kernel_size=3, stride=1, padding=0, bias=False)
         self.dropout43 = nn.Dropout(dropout)
-        self.block43 = Block(num_features*16, num_features*8, num_residuals=num_residuals, gated=gated, gate_param=gate_param)
+        self.block43 = Block(num_features*16, num_features*8, num_residuals=num_residuals, gated=gated, gate_param=gate_param, batchnorm=False, activation='leaky')
 
         # 11 -> 33
         self.up32 = UpsampleConvLayer(num_features*8, num_features*4, scale_factor=3)
         self.dropout32 = nn.Dropout(dropout)
-        self.block32 = Block(num_features*8, num_features*4, num_residuals=num_residuals, gated=gated, gate_param=gate_param)
+        self.block32 = Block(num_features*8, num_features*4, num_residuals=num_residuals, gated=gated, gate_param=gate_param, batchnorm=False, activation='leaky')
 
         # 33 -> 99
         self.up21 = UpsampleConvLayer(num_features*4, num_features*2, scale_factor=3)
         self.dropout21 = nn.Dropout(dropout)
-        self.block21 = Block(num_features*4, num_features*2, num_residuals=num_residuals, gated=gated, gate_param=gate_param)
+        self.block21 = Block(num_features*4, num_features*2, num_residuals=num_residuals, gated=gated, gate_param=gate_param, batchnorm=False, activation='leaky')
 
         # 99 -> 101
         self.up10 = nn.ConvTranspose2d(num_features*2, num_features*1, kernel_size=3, stride=1, padding=0, bias=False)
         self.dropout10 = nn.Dropout(dropout)
-        self.block10 = Block(num_features*2, num_features*1, num_residuals=num_residuals, gated=gated, gate_param=gate_param)
+        self.block10 = Block(num_features*2, num_features*1, num_residuals=num_residuals, gated=gated, gate_param=gate_param, batchnorm=False, activation='leaky')
 
     def forward(self, x):
         b01 = self.block01(x)
