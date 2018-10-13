@@ -101,7 +101,7 @@ class ResidualBlock(nn.Module):
     def forward(self, x):
         y = self.main(x)
         if self.gated:
-            return F.sigmoid(self.gate_param)*x + y
+            return torch.sigmoid(self.gate_param)*x + y
         else:
             return x + y
 
@@ -116,9 +116,9 @@ class Block(nn.Module):
         main.add_module('conv_{}_{}'.format(in_channels, out_channels),
                         ConvLayer(in_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=True))
 
-        for _ in range(num_residuals):
-            main.add_module('residual_{}_{}'.format(out_channels, out_channels),
-                            ResidualBlock(out_channels, gated=gated, gate_param=gate_param, batchnorm=batchnorm))
+        for i in range(num_residuals):
+            main.add_module('residual_{}_{}_{}'.format(i, out_channels, out_channels),
+                            ResidualBlock(out_channels, gated=gated, gate_param=gate_param, batchnorm=batchnorm, activation=activation))
 
         if batchnorm:
             main.add_module('bn_{}'.format(out_channels), nn.BatchNorm2d(out_channels))
@@ -134,7 +134,7 @@ class Unetv0(nn.Module):
     def __init__(self, num_features, num_residuals=2, gated=False, gate_param=0., sigmoid=True):
         super(Unetv0, self).__init__()
 
-        self.block01 = Block(1, num_features*1, num_residuals=2, gated=gated, gate_param=gate_param)
+        self.block01 = Block(1, num_features*1, num_residuals=num_residuals, gated=gated, gate_param=gate_param)
         # 101 -> 50
         self.down01 = nn.MaxPool2d(2)
 
@@ -194,10 +194,10 @@ class Unetv0(nn.Module):
         u21 = torch.cat([u21,b12], dim=1)
         b21 = self.block21(u21)
         u10 = self.up10(b21)  # 50 -> 101
-        u10 = torch.cat([u10,b01], dim=1)
-        b10 = self.block10(u10)
-        # y = self.final_acti(self.final_conv(b10))
-        y = self.final_conv(b10)
+        # u10 = torch.cat([u10,b01], dim=1)
+        # b10 = self.block10(u10)
+        # y = self.final_conv(b10)
+        y = self.final_conv(u10)  # seems to be better without last U, at least for v1
         if self.sigmoid:
             y = self.final_acti(y)
         return y
@@ -209,71 +209,6 @@ class Unetv0a(Unetv0):
         self.down12 = nn.Conv2d(num_features*2, num_features*2, kernel_size=2, stride=2, padding=0, bias=False)
         self.down23 = nn.Conv2d(num_features*4, num_features*4, kernel_size=3, stride=2, padding=0, bias=False)
         self.down34 = nn.Conv2d(num_features*8, num_features*8, kernel_size=2, stride=2, padding=0, bias=False)
-
-# class Unetv1(nn.Module):
-#     def __init__(self, num_features, num_residuals=2, gated=False, gate_param=0.):
-#         super(Unetv1, self).__init__()
-
-#         self.block01 = Block(1, num_features*1, num_residuals=2, gated=gated, gate_param=gate_param)
-#         # 101 -> 99
-#         self.down01 = nn.Conv2d(num_features*1, num_features*1, kernel_size=3, stride=1, padding=0, bias=False)
-
-#         self.block12 = Block(num_features*1, num_features*2, num_residuals=num_residuals, gated=gated, gate_param=gate_param)
-#         # 99 -> 33
-#         self.down12 = nn.MaxPool2d(3)
-
-#         self.block23 = Block(num_features*2, num_features*4, num_residuals=num_residuals, gated=gated, gate_param=gate_param)
-#         # 33 -> 11
-#         self.down23 = nn.MaxPool2d(3)
-
-#         self.block34 = Block(num_features*4, num_features*8, num_residuals=num_residuals, gated=gated, gate_param=gate_param)
-#         # 11 -> 9
-#         self.down34 = nn.Conv2d(num_features*8, num_features*8, kernel_size=3, stride=1, padding=0, bias=False)
-
-#         # middle
-#         self.block44 = Block(num_features*8, num_features*16, num_residuals=num_residuals, gated=gated, gate_param=gate_param)
-
-#         # 9 -> 11
-#         self.up43 = nn.ConvTranspose2d(num_features*16, num_features*8, kernel_size=3, stride=1, padding=0, bias=False)
-#         self.block43 = Block(num_features*16, num_features*8, num_residuals=num_residuals, gated=gated, gate_param=gate_param)
-
-#         # 11 -> 33
-#         self.up32 = UpsampleConvLayer(num_features*8, num_features*4, scale_factor=3)
-#         self.block32 = Block(num_features*8, num_features*4, num_residuals=num_residuals, gated=gated, gate_param=gate_param)
-
-#         # 33 -> 99
-#         self.up21 = UpsampleConvLayer(num_features*4, num_features*2, scale_factor=3)
-#         self.block21 = Block(num_features*4, num_features*2, num_residuals=num_residuals, gated=gated, gate_param=gate_param)
-
-#         # 99 -> 101
-#         self.up10 = nn.ConvTranspose2d(num_features*2, num_features*1, kernel_size=3, stride=1, padding=0, bias=False)
-#         self.block10 = Block(num_features*2, num_features*1, num_residuals=num_residuals, gated=gated, gate_param=gate_param)
-
-#         self.final_conv = nn.Conv2d(num_features*1, 1, kernel_size=1, stride=1, padding=0, bias=True)
-#         self.final_acti = nn.Sigmoid()
-
-#     def forward(self, x):
-#         b01 = self.block01(x)
-#         d01 = self.down01(b01)  # 101 -> 99
-#         b12 = self.block12(d01)
-#         d12 = self.down12(b12)  # 99 -> 33
-#         b23 = self.block23(d12)
-#         d23 = self.down23(b23)  # 33 -> 11
-#         b34 = self.block34(d23)
-#         d34 = self.down34(b34)  # 11 -> 9
-#         b44 = self.block44(d34)  # middle
-#         u43 = self.up43(b44)  # 9 -> 11
-#         u43 = torch.cat([u43,b34], dim=1)
-#         b43 = self.block43(u43)
-#         u32 = self.up32(b43)  # 11 -> 33
-#         u32 = torch.cat([u32,b23], dim=1)
-#         b32 = self.block32(u32)
-#         u21 = self.up21(b32)  # 33 -> 99
-#         u21 = torch.cat([u21,b12], dim=1)
-#         b21 = self.block21(u21)
-#         u10 = self.up10(b21)  # 99 -> 101
-#         y = self.final_acti(self.final_conv(u10))
-#         return y
 
 class Unetv1(Unetv0):
     def __init__(self, num_features, num_residuals=2, gated=False, gate_param=0., sigmoid=True):
@@ -429,7 +364,6 @@ class DCGAN_Gv0(nn.Module):
         x = self.main(z)
         x = 0.5 * (x + 1.0)  # [-1,1] -> [0,1]
         return x
-
 class DCGAN_Gv0a(nn.Module):
     def __init__(self, num_features, nz, nc=1):
         super(DCGAN_Gv0a, self).__init__()
@@ -537,89 +471,91 @@ choiceD = {'v0':DCGAN_Dv0, 'v0a':DCGAN_Dv0a, 'v0b':DCGAN_Dv0b,
            'v2':DCGAN_Dv2}
 
 class UnetPhi(nn.Module):
-    def __init__(self, num_features, num_residuals=2, gated=False, gate_param=0., dropout=0.2):
+    def __init__(self, num_features, num_residuals=2, gated=False, gate_param=0., batchnorm=False, activation='relu', dropout=0.2):
         super(UnetPhi, self).__init__()
 
-        self.block01 = Block(1, num_features*1, num_residuals=2, gated=gated, gate_param=gate_param, batchnorm=False, activation='leaky')
+        self.block01 = Block(1, num_features*1, num_residuals=num_residuals, gated=gated, gate_param=gate_param, batchnorm=batchnorm, activation=activation)
         # 101 -> 99
         self.down01 = nn.Conv2d(num_features*1, num_features*1, kernel_size=3, stride=1, padding=0, bias=False)
         self.dropout01 = nn.Dropout(dropout)
 
-        self.block12 = Block(num_features*1, num_features*2, num_residuals=num_residuals, gated=gated, gate_param=gate_param, batchnorm=False, activation='leaky')
+        self.block12 = Block(num_features*1, num_features*2, num_residuals=num_residuals, gated=gated, gate_param=gate_param, batchnorm=batchnorm, activation=activation)
         # 99 -> 33
         self.down12 = nn.MaxPool2d(3)
         self.dropout12 = nn.Dropout(dropout)
 
-        self.block23 = Block(num_features*2, num_features*4, num_residuals=num_residuals, gated=gated, gate_param=gate_param, batchnorm=False, activation='leaky')
+        self.block23 = Block(num_features*2, num_features*4, num_residuals=num_residuals, gated=gated, gate_param=gate_param, batchnorm=batchnorm, activation=activation)
         # 33 -> 11
         self.down23 = nn.MaxPool2d(3)
         self.dropout23 = nn.Dropout(dropout)
 
-        self.block34 = Block(num_features*4, num_features*8, num_residuals=num_residuals, gated=gated, gate_param=gate_param, batchnorm=False, activation='leaky')
+        self.block34 = Block(num_features*4, num_features*8, num_residuals=num_residuals, gated=gated, gate_param=gate_param, batchnorm=batchnorm, activation=activation)
         # 11 -> 9
         self.down34 = nn.Conv2d(num_features*8, num_features*8, kernel_size=3, stride=1, padding=0, bias=False)
         self.dropout34 = nn.Dropout(dropout)
 
         # middle
-        self.block44 = Block(num_features*8, num_features*16, num_residuals=num_residuals, gated=gated, gate_param=gate_param, batchnorm=False, activation='leaky')
+        self.block44 = Block(num_features*8, num_features*16, num_residuals=num_residuals, gated=gated, gate_param=gate_param, batchnorm=batchnorm, activation=activation)
 
         # 9 -> 11
         self.up43 = nn.ConvTranspose2d(num_features*16, num_features*8, kernel_size=3, stride=1, padding=0, bias=False)
         self.dropout43 = nn.Dropout(dropout)
-        self.block43 = Block(num_features*16, num_features*8, num_residuals=num_residuals, gated=gated, gate_param=gate_param, batchnorm=False, activation='leaky')
+        self.block43 = Block(num_features*16, num_features*8, num_residuals=num_residuals, gated=gated, gate_param=gate_param, batchnorm=batchnorm, activation=activation)
 
         # 11 -> 33
-        self.up32 = UpsampleConvLayer(num_features*8, num_features*4, scale_factor=3)
+        self.up32 = UpsampleConvLayer(num_features*8, num_features*4, bias=False, scale_factor=3)
         self.dropout32 = nn.Dropout(dropout)
-        self.block32 = Block(num_features*8, num_features*4, num_residuals=num_residuals, gated=gated, gate_param=gate_param, batchnorm=False, activation='leaky')
+        self.block32 = Block(num_features*8, num_features*4, num_residuals=num_residuals, gated=gated, gate_param=gate_param, batchnorm=batchnorm, activation=activation)
 
         # 33 -> 99
-        self.up21 = UpsampleConvLayer(num_features*4, num_features*2, scale_factor=3)
+        self.up21 = UpsampleConvLayer(num_features*4, num_features*2, bias=False, scale_factor=3)
         self.dropout21 = nn.Dropout(dropout)
-        self.block21 = Block(num_features*4, num_features*2, num_residuals=num_residuals, gated=gated, gate_param=gate_param, batchnorm=False, activation='leaky')
+        self.block21 = Block(num_features*4, num_features*2, num_residuals=num_residuals, gated=gated, gate_param=gate_param, batchnorm=batchnorm, activation=activation)
 
         # 99 -> 101
         self.up10 = nn.ConvTranspose2d(num_features*2, num_features*1, kernel_size=3, stride=1, padding=0, bias=False)
         self.dropout10 = nn.Dropout(dropout)
-        self.block10 = Block(num_features*2, num_features*1, num_residuals=num_residuals, gated=gated, gate_param=gate_param, batchnorm=False, activation='leaky')
+        self.block10 = Block(num_features*2, num_features*1, num_residuals=num_residuals, gated=gated, gate_param=gate_param, batchnorm=batchnorm, activation=activation)
 
     def forward(self, x):
         b01 = self.block01(x)
         d01 = self.down01(b01)  # 101 -> 99
-        d01 = self.dropout01(d01)
+        # d01 = self.dropout01(d01)
         b12 = self.block12(d01)
         d12 = self.down12(b12)  # 99 -> 33
-        d12 = self.dropout12(d12)
+        # d12 = self.dropout12(d12)
         b23 = self.block23(d12)
         d23 = self.down23(b23)  # 33 -> 11
-        d23 = self.dropout23(d23)
+        # d23 = self.dropout23(d23)
         b34 = self.block34(d23)
         d34 = self.down34(b34)  # 11 -> 9
-        d34 = self.dropout34(d34)
+        # d34 = self.dropout34(d34)
         b44 = self.block44(d34)  # middle
         u43 = self.up43(b44)  # 9 -> 11
         u43 = torch.cat([u43,b34], dim=1)
-        u43 = self.dropout43(u43)
+        # u43 = self.dropout43(u43)
         b43 = self.block43(u43)
         u32 = self.up32(b43)  # 11 -> 33
         u32 = torch.cat([u32,b23], dim=1)
-        u32 = self.dropout32(u32)
+        # u32 = self.dropout32(u32)
         b32 = self.block32(u32)
         u21 = self.up21(b32)  # 33 -> 99
         u21 = torch.cat([u21,b12], dim=1)
-        u21 = self.dropout21(u21)
+        # u21 = self.dropout21(u21)
         b21 = self.block21(u21)
         u10 = self.up10(b21)  # 99 -> 101
-        u10 = torch.cat([u10,b01], dim=1)
-        u10 = self.dropout10(u10)
-        b10 = self.block10(u10)
-        return b10
+        # seems to be better without last U
+        # u10 = torch.cat([u10,b01], dim=1)
+        # u10 = self.dropout10(u10)
+        # b10 = self.block10(u10)
+        # return b10
+        return u10
 
 class UnetD(nn.Module):
-    def __init__(self, num_features, num_residuals=2, gated=False, gate_param=0., dropout=0.2):
+    def __init__(self, num_features, num_residuals=2, gated=False, gate_param=0., dropout=0.):
         super(UnetD, self).__init__()
 
-        self.main = UnetPhi(num_features, num_residuals=num_residuals, gated=gated, gate_param=gate_param, dropout=dropout)
+        self.main = UnetPhi(num_features, num_residuals=num_residuals, gated=gated, gate_param=gate_param, batchnorm=True, dropout=dropout)
         self.s = nn.Conv2d(num_features, 1, kernel_size=1, stride=1, padding=0, bias=True)
         self.v = nn.Conv2d(num_features, 1, kernel_size=1, stride=1, padding=0, bias=True)
 
@@ -630,10 +566,10 @@ class UnetD(nn.Module):
             return sphi
         else:
             vphi = self.v(phi)
-            psphi = self.get_pysphi(sphi)
+            psphi = self.get_psphi(sphi) 
             # y = (psphi - vphi).view(x.size(0), -1).mean(-1, keepdim=True)
             y = psphi - vphi
             return y, psphi, vphi
 
     def get_psphi(self, sphi):
-        return sphi * (1 + 2*F.sigmoid(2*sphi))
+        return sphi * (1 + 2*torch.sigmoid(2*sphi))
