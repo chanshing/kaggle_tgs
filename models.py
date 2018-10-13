@@ -117,7 +117,7 @@ class Block(nn.Module):
                         ConvLayer(in_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=True))
 
         for i in range(num_residuals):
-            main.add_module('residual_{}_{}_{}'.format(i, out_channels, out_channels),
+            main.add_module('residual_{}_{}_{}'.format(i+1, out_channels, out_channels),
                             ResidualBlock(out_channels, gated=gated, gate_param=gate_param, batchnorm=batchnorm, activation=activation))
 
         if batchnorm:
@@ -194,10 +194,11 @@ class Unetv0(nn.Module):
         u21 = torch.cat([u21,b12], dim=1)
         b21 = self.block21(u21)
         u10 = self.up10(b21)  # 50 -> 101
+        # --- seems to be better without last U, at least for v1
         # u10 = torch.cat([u10,b01], dim=1)
         # b10 = self.block10(u10)
         # y = self.final_conv(b10)
-        y = self.final_conv(u10)  # seems to be better without last U, at least for v1
+        y = self.final_conv(u10)
         if self.sigmoid:
             y = self.final_acti(y)
         return y
@@ -520,31 +521,31 @@ class UnetPhi(nn.Module):
     def forward(self, x):
         b01 = self.block01(x)
         d01 = self.down01(b01)  # 101 -> 99
-        # d01 = self.dropout01(d01)
+        d01 = self.dropout01(d01)
         b12 = self.block12(d01)
         d12 = self.down12(b12)  # 99 -> 33
-        # d12 = self.dropout12(d12)
+        d12 = self.dropout12(d12)
         b23 = self.block23(d12)
         d23 = self.down23(b23)  # 33 -> 11
-        # d23 = self.dropout23(d23)
+        d23 = self.dropout23(d23)
         b34 = self.block34(d23)
         d34 = self.down34(b34)  # 11 -> 9
-        # d34 = self.dropout34(d34)
+        d34 = self.dropout34(d34)
         b44 = self.block44(d34)  # middle
         u43 = self.up43(b44)  # 9 -> 11
         u43 = torch.cat([u43,b34], dim=1)
-        # u43 = self.dropout43(u43)
+        u43 = self.dropout43(u43)
         b43 = self.block43(u43)
         u32 = self.up32(b43)  # 11 -> 33
         u32 = torch.cat([u32,b23], dim=1)
-        # u32 = self.dropout32(u32)
+        u32 = self.dropout32(u32)
         b32 = self.block32(u32)
         u21 = self.up21(b32)  # 33 -> 99
         u21 = torch.cat([u21,b12], dim=1)
-        # u21 = self.dropout21(u21)
+        u21 = self.dropout21(u21)
         b21 = self.block21(u21)
         u10 = self.up10(b21)  # 99 -> 101
-        # seems to be better without last U
+        # --- seems to be better without last U
         # u10 = torch.cat([u10,b01], dim=1)
         # u10 = self.dropout10(u10)
         # b10 = self.block10(u10)
