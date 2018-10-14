@@ -170,7 +170,8 @@ def get_coverage(mask):
 def get_score(masks_pred, masks, threshold=0.5):
 
     masks_pred = masks_pred > threshold
-    masks = masks > threshold
+    # masks = masks > threshold
+    masks = masks.astype(bool)
 
     iou_cuts = np.arange(0.5, 1, 0.05)
 
