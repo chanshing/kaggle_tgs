@@ -3,7 +3,7 @@ import random
 import numpy as np
 import scipy.stats as stats
 # from scipy.signal import medfilt
-from itertools import izip
+# from itertools import izip
 
 from skimage import transform as stf
 from skimage import io
@@ -46,6 +46,23 @@ class SegmentationDataset(Dataset):
             image, mask = self.transform((image, mask))
 
         return image, mask
+
+class DefaultDataset(Dataset):
+    def __init__(self, images, transform=None):
+        self.images = images
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, idx):
+        image = self.images[idx]
+
+        if self.transform:
+            image = self.transform(image)
+
+        return image
+
 
 class DataIterator(object):
     def __init__(self, dataset, batch_size=8):
@@ -122,6 +139,12 @@ class ToTensor(object):
         mask = torch.from_numpy(mask)
         return (image, mask)
 
+def load_images(root_dir):
+    fnames = os.listdir('{}/images'.format(root_dir))
+    # load as grey, float32, unsqueeze
+    images = np.array([io.imread('{}/images/{}'.format(root_dir, fname), as_gray=True).astype(np.float32)[None,...] for fname in fnames])
+    return images
+
 def load_seismic_data(root_dir, test_size=None, random_state=42):
     fnames = os.listdir('{}/images'.format(root_dir))
     # load as grey, float32, unsqueeze
@@ -144,22 +167,12 @@ def coverage_to_class(val):
 def get_coverage(mask):
     return np.sum(mask)/(mask.shape[0]*mask.shape[1])
 
-def get_score(masks, masks_pred, threshold=0.5):
+def get_score(masks_pred, masks, threshold=0.5):
 
     masks_pred = masks_pred > threshold
     masks = masks > threshold
 
     iou_cuts = np.arange(0.5, 1, 0.05)
-
-    # scores = []
-    # for m, mp in izip(masks, masks_pred):
-    #     intersection = np.logical_and(m, mp)
-    #     union = np.logical_or(m, mp)
-    #     if np.any(union):
-    #         iou = float(np.sum(intersection)) / (np.sum(union) + 1e-16)
-    #     else:
-    #         iou = 1.0
-    #     scores.append(np.mean(iou > iou_cuts))
 
     n = masks.shape[0]
     intersection = np.logical_and(masks, masks_pred).reshape(n,-1)
