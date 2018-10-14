@@ -34,22 +34,6 @@ def main(args):
 
     log = logger.LoggerBCE(args.outf, netF, torch.from_numpy(images_train), torch.from_numpy(masks_train), torch.from_numpy(images_test), torch.from_numpy(masks_test), bcefunc=loss_func, device=device)
 
-    # for epoch in range(args.nepoch):
-    #     for images, masks in dataloader:
-
-    #         optimizerF.zero_grad()
-    #         images, masks = images.to(device), masks.to(device)
-    #         masks_pred = netF(images)
-    #         loss = loss_func(masks_pred, masks)
-    #         loss.backward()
-    #         optimizerF.step()
-
-    #     print "epoch [{}/{}] | loss: {:.3f}".format(epoch+1, args.nepoch, loss.item())
-    #     log.flush(epoch+1)
-
-    #     if (epoch+1) > 10000:
-    #         torch.save(netF.state_dict(), '{}/netF_iter_{}.pth'.format(args.outf, epoch+1))
-
     for i in range(args.niter):
         optimizerF.zero_grad()
         images, masks = next(dataiter)
